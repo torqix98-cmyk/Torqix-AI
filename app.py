@@ -40,7 +40,7 @@ hf_client = InferenceClient(model="meta-llama/Llama-3.1-8B-Instruct", token=HF_T
 APP_URL = "https://torqix-ai.streamlit.app"
 
 # ─── DATABASE HELPER FUNCTIONS ───
-def sync_user_profile(user_id, email=""):
+def sync_user_profile(user_id, email="builder@torqix.ai"):
     profile_payload = {
         "id": str(user_id),
         "email": str(email),
@@ -50,58 +50,56 @@ def sync_user_profile(user_id, email=""):
         "total_messages_sent": 0
     }
     try:
-        res = supabase.table("user_profiles").select("*").eq("id", user_id).execute()
+        res = supabase.table("user_profiles").select("*").eq("id", str(user_id)).execute()
         if res.data and len(res.data) > 0:
             return res.data[0]
         
         upsert_res = supabase.table("user_profiles").upsert(profile_payload, on_conflict="id").execute()
         if upsert_res.data and len(upsert_res.data) > 0:
             return upsert_res.data[0]
-    except Exception:
-        pass
+    except Exception as e:
+        st.error(f"Database Sync Warning: {e}")
     return profile_payload
 
 
 def update_user_credits(user_id, new_credits, total_messages):
     try:
         supabase.table("user_profiles").update({
-            "credits_remaining": new_credits,
-            "total_messages_sent": total_messages
-        }).eq("id", user_id).execute()
-    except Exception:
-        pass
+            "credits_remaining": int(new_credits),
+            "total_messages_sent": int(total_messages)
+        }).eq("id", str(user_id)).execute()
+    except Exception as e:
+        st.error(f"Credit Sync Error: {e}")
 
-# ─── SESSION RESTORATION & STRIPE RETURN HANDLING ───
+# ─── SESSION AUTO-RECOVERY & STRIPE RETURN ───
 query_params = st.query_params
 
-if "user_id" in query_params:
-    target_uid = query_params["user_id"]
-    target_email = query_params.get("email", "")
-    
-    st.session_state.user_id = target_uid
-    st.session_state.user_email = target_email
-    st.session_state.user = {"id": target_uid, "email": target_email}
-    st.session_state.profile = sync_user_profile(target_uid, target_email)
+# Check URL for returned session parameters
+if "uid" in query_params:
+    st.session_state.user_id = query_params["uid"]
+    st.session_state.user_email = query_params.get("email", "user@torqix.ai")
+    st.session_state.user = {"id": query_params["uid"], "email": st.session_state.user_email}
 
-    if "payment" in query_params and query_params["payment"] == "success":
-        paid_tier = query_params.get("tier", "pro")
+# Payment Return Listener
+if "payment" in query_params and query_params["payment"] == "success":
+    paid_tier = query_params.get("tier", "pro")
+    target_uid = st.session_state.get("user_id", query_params.get("uid", None))
+    
+    if target_uid:
         credits_cap = 3000000 if paid_tier == "infinity" else 1000000
         
+        # Force database sync
         try:
             supabase.table("user_profiles").update({
                 "tier": str(paid_tier),
                 "credits_remaining": int(credits_cap),
                 "max_daily_credits": int(credits_cap)
-            }).eq("id", target_uid).execute()
-        except Exception:
-            pass
+            }).eq("id", str(target_uid)).execute()
+        except Exception as e:
+            st.error(f"Tier Upgrade Error: {e}")
 
-        if "profile" in st.session_state:
-            st.session_state.profile["tier"] = paid_tier
-            st.session_state.profile["credits_remaining"] = credits_cap
-            st.session_state.profile["max_daily_credits"] = credits_cap
-            
-        st.toast(f"🎉 Payment Verified! Switched to Torqix {paid_tier.upper()} mode.", icon="🔥")
+        st.session_state.profile = sync_user_profile(target_uid)
+        st.toast(f"🎉 Upgrade Successful! Switched to {paid_tier.upper()} mode.", icon="🔥")
 
 # ─── BRAND HEADER ───
 col_logo, col_title = st.columns([1, 6])
@@ -132,12 +130,11 @@ if "user" not in st.session_state:
                     st.session_state.user_email = res.user.email
                     st.session_state.profile = sync_user_profile(res.user.id, res.user.email)
                     
-                    st.query_params["user_id"] = res.user.id
+                    st.query_params["uid"] = res.user.id
                     st.query_params["email"] = res.user.email
-                    st.success("Successfully authenticated!")
                     st.rerun()
             except Exception as err:
-                st.error(f"Authentication Failed: {err}")
+                st.error(f"Sign In Failed: {err}")
 
     with tab_signup:
         signup_email = st.text_input("Email", key="s_email")
@@ -151,24 +148,25 @@ if "user" not in st.session_state:
                     st.session_state.user_email = res.user.email
                     st.session_state.profile = sync_user_profile(res.user.id, res.user.email)
                     
-                    st.query_params["user_id"] = res.user.id
+                    st.query_params["uid"] = res.user.id
                     st.query_params["email"] = res.user.email
-                    st.success("Account registered!")
+                    st.success("Account created!")
                     st.rerun()
             except Exception as err:
-                st.error(f"Registration Failed: {err}")
+                st.error(f"Sign Up Failed: {err}")
 
     with tab_google:
-        st.write("Sign in via Google OAuth integration.")
+        st.write("OAuth Direct Auth")
         if st.button("Continue with Google"):
             try:
                 res = supabase.auth.sign_in_with_oauth({
                     "provider": "google",
                     "options": {"redirect_to": APP_URL}
                 })
-                st.markdown(f"[👉 Complete Google Authentication]({res.url})")
+                if res.url:
+                    st.markdown(f"[👉 Complete Google Authentication]({res.url})")
             except Exception as err:
-                st.error(f"OAuth Initialization Error: {err}")
+                st.error(f"OAuth Error: {err}")
 
 else:
     # ─── ACTIVE USER WORKSPACE ───
@@ -187,7 +185,10 @@ else:
     
     st.sidebar.markdown(f"**Logged in:** `{user_email}`")
     if st.sidebar.button("Log Out"):
-        supabase.auth.sign_out()
+        try:
+            supabase.auth.sign_out()
+        except Exception:
+            pass
         st.query_params.clear()
         for key in ["user", "user_id", "user_email", "profile", "messages"]:
             if key in st.session_state:
@@ -214,21 +215,21 @@ else:
             st.markdown("""
                 <div style='background: #121000; border: 1px solid #FFD700; padding: 12px 20px; border-radius: 10px; margin-bottom: 20px;'>
                     <span class='tier-badge-infinity'>🔥 INFINITY ENGINE UNLOCKED</span>
-                    <p style='margin: 5px 0 0 0; font-size: 0.9rem; color: #E2E8F0;'>Maximum Context Window (1,500 Tokens) • Priority Processing • Uncapped Capabilities</p>
+                    <p style='margin: 5px 0 0 0; font-size: 0.9rem; color: #E2E8F0;'>Maximum Context Window (1,500 Tokens) • Priority Processing</p>
                 </div>
             """, unsafe_allow_html=True)
             max_response_tokens = 1500
-            system_persona = "You are Torqix AI operating in 🔥 INFINITY ENGINE MODE. You possess maximum computational output, deep analytical depth, and execution capabilities. Assist the builder with precision."
+            system_persona = "You are Torqix AI operating in 🔥 INFINITY ENGINE MODE."
 
         elif user_tier == "pro":
             st.markdown("""
                 <div style='background: #0C0812; border: 1px solid #A020F0; padding: 12px 20px; border-radius: 10px; margin-bottom: 20px;'>
                     <span class='tier-badge-pro'>👑 PRO TERMINAL ACTIVE</span>
-                    <p style='margin: 5px 0 0 0; font-size: 0.9rem; color: #E2E8F0;'>Expanded Output Window (1,000 Tokens) • Accelerated Pipeline Priority</p>
+                    <p style='margin: 5px 0 0 0; font-size: 0.9rem; color: #E2E8F0;'>Expanded Output Window (1,000 Tokens)</p>
                 </div>
             """, unsafe_allow_html=True)
             max_response_tokens = 1000
-            system_persona = "You are Torqix AI operating in 👑 PRO MODE. You deliver fast, expanded high-performance code and insights."
+            system_persona = "You are Torqix AI operating in 👑 PRO MODE."
 
         else:
             st.markdown("""
@@ -238,10 +239,10 @@ else:
                 </div>
             """, unsafe_allow_html=True)
             max_response_tokens = 500
-            system_persona = "You are Torqix AI, an intelligent assistant created specifically for disciplined builders and developers. Always refer to yourself strictly as Torqix AI."
+            system_persona = "You are Torqix AI, an intelligent assistant for builders."
 
         if profile["credits_remaining"] < 10:
-            st.error("⚠️ Daily credit balance depleted. Upgrade your parameters in the Subscription Portal to continue.")
+            st.error("⚠️ Daily credit balance depleted. Upgrade in Subscriptions & Billing to continue.")
         else:
             if "messages" not in st.session_state:
                 st.session_state.messages = []
@@ -273,6 +274,7 @@ else:
                     st.write(reply)
                 st.session_state.messages.append({"role": "assistant", "content": reply})
 
+                # Deduct credits locally and update Supabase
                 st.session_state.profile["credits_remaining"] -= 10
                 st.session_state.profile["total_messages_sent"] += 1
                 
@@ -281,19 +283,16 @@ else:
                     new_credits=st.session_state.profile["credits_remaining"],
                     total_messages=st.session_state.profile["total_messages_sent"]
                 )
-                
                 st.rerun()
 
     # ─── BILLING PAGE ───
     elif page == "💎 Subscriptions & Billing":
         st.subheader("💎 Operational Tiers & Computational Systems")
-        st.write("Upgrading automatically switches your active terminal environment and unlocks higher token allowances.")
 
         col1, col2, col3 = st.columns(3)
 
-        # Build direct payment links without breaking URL parameters
-        pro_stripe_base = "https://buy.stripe.com/test_5kQeVd2VR24OeCJ67W8IU00"
-        infinity_stripe_base = "https://buy.stripe.com/test_dRm3cv9kf38S8el67W8IU02"
+        pro_stripe_base = f"https://buy.stripe.com/test_5kQeVd2VR24OeCJ67W8IU00"
+        infinity_stripe_base = f"https://buy.stripe.com/test_5kQ14n8gbaBkgKR53S8IU01"
 
         with col1:
             st.markdown("<div class='credit-box'>", unsafe_allow_html=True)
@@ -301,7 +300,6 @@ else:
             st.markdown("<h2>Free</h2>", unsafe_allow_html=True)
             st.write("• 1,000 Daily Credits")
             st.write("• 500 Token Output Cap")
-            st.write("• Standard Processing Queue")
             if user_tier == "free":
                 st.button("Active Plan", disabled=True, key="free_active")
             st.markdown("</div>", unsafe_allow_html=True)
@@ -312,7 +310,6 @@ else:
             st.markdown("<h2>₹499 <span style='font-size:14px;color:#94A3B8;'>/mo</span></h2>", unsafe_allow_html=True)
             st.write("• 1,000,000 Daily Credits")
             st.write("• 1,000 Token Output Cap")
-            st.write("• Accelerated Priority Pipeline")
             if user_tier == "pro":
                 st.button("Active Plan", disabled=True, key="pro_active")
             else:
@@ -325,8 +322,6 @@ else:
             st.markdown("<h2>₹999 <span style='font-size:14px;color:#94A3B8;'>/mo</span></h2>", unsafe_allow_html=True)
             st.write("• 3,000,000 Daily Credits")
             st.write("• 1,500 Max Token Output")
-            st.write("• Deep Analytical Reasoning Mode")
-            st.write("• Maximum Queue Bypass")
             if user_tier == "infinity":
                 st.button("Active Plan", disabled=True, key="inf_active")
             else:
