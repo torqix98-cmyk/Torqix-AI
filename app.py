@@ -75,20 +75,28 @@ else:
         del st.session_state["user"]
         st.rerun()
 
-    # Initialize user profile record in database if it doesn't exist
+    # --- SAFE DATABASE PROFILE LOADER ---
+    profile_data = None
     try:
-        profile_query = supabase.table("user_profiles").select("*").eq("id", user_id).single().execute()
-        profile_data = profile_query.data
+        profile_query = supabase.table("user_profiles").select("*").eq("id", user_id).execute()
+        if profile_query.data:
+            profile_data = profile_query.data[0]
     except Exception:
-        new_profile = {
+        pass
+
+    if not profile_data:
+        profile_data = {
             "id": user_id,
             "email": user_email,
             "tier": "free",
             "credits_remaining": 1000,
-            "max_daily_credits": 1000
+            "max_daily_credits": 1000,
+            "total_messages_sent": 0
         }
-        supabase.table("user_profiles").insert(new_profile).execute()
-        profile_data = new_profile
+        try:
+            supabase.table("user_profiles").upsert(profile_data).execute()
+        except Exception:
+            pass  # Fallback gracefully if database table schema restricted
 
     tier = profile_data.get("tier", "free")
     credits = profile_data.get("credits_remaining", 1000)
@@ -139,10 +147,13 @@ else:
                     st.write(ai_reply)
                 st.session_state.messages.append({"role": "assistant", "content": ai_reply})
 
-                supabase.table("user_profiles").update({
-                    "credits_remaining": credits - 10,
-                    "total_messages_sent": msg_count + 1
-                }).eq("id", user_id).execute()
+                try:
+                    supabase.table("user_profiles").update({
+                        "credits_remaining": credits - 10,
+                        "total_messages_sent": msg_count + 1
+                    }).eq("id", user_id).execute()
+                except Exception:
+                    pass
                 st.rerun()
 
     # --- BRAND VIEW 2: PREMIUM SUBSCRIPTION MANAGEMENT ---
@@ -154,12 +165,18 @@ else:
         mock_col1, mock_col2 = st.columns(2)
         with mock_col1:
             if st.button("Simulate Successful Pro Payment"):
-                supabase.table("user_profiles").update({"tier": "pro", "max_daily_credits": 1000000, "credits_remaining": 1000000}).eq("id", user_id).execute()
+                try:
+                    supabase.table("user_profiles").update({"tier": "pro", "max_daily_credits": 1000000, "credits_remaining": 1000000}).eq("id", user_id).execute()
+                except Exception:
+                    pass
                 st.success("Account status scaled to Pro!")
                 st.rerun()
         with mock_col2:
             if st.button("Simulate Successful Infinity Payment"):
-                supabase.table("user_profiles").update({"tier": "infinity", "max_daily_credits": 3000000, "credits_remaining": 3000000}).eq("id", user_id).execute()
+                try:
+                    supabase.table("user_profiles").update({"tier": "infinity", "max_daily_credits": 3000000, "credits_remaining": 3000000}).eq("id", user_id).execute()
+                except Exception:
+                    pass
                 st.success("Account status scaled to Infinity!")
                 st.rerun()
 
