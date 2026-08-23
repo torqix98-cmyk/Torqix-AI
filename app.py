@@ -8,14 +8,8 @@ st.set_page_config(page_title="Torqix AI Workspace", page_icon="🚀", layout="w
 
 st.markdown("""
 <style>
-    .stApp {
-        background-color: #0B0E14;
-        color: #E2E8F0;
-    }
-    div[data-testid="stSidebar"] {
-        background-color: #111827;
-        border-right: 1px solid #1E293B;
-    }
+    .stApp { background-color: #0B0E14; color: #E2E8F0; }
+    div[data-testid="stSidebar"] { background-color: #111827; border-right: 1px solid #1E293B; }
     .main-header {
         background: linear-gradient(90deg, #A020F0 0%, #6366F1 100%);
         -webkit-background-clip: text;
@@ -23,55 +17,15 @@ st.markdown("""
         font-weight: 800;
         font-size: 2.8rem;
     }
-    .sub-header {
-        color: #94A3B8;
-        font-size: 1.1rem;
-        margin-bottom: 20px;
-    }
+    .sub-header { color: #94A3B8; font-size: 1.1rem; margin-bottom: 20px; }
     .stButton>button {
         background: linear-gradient(90deg, #A020F0 0%, #6366F1 100%);
-        color: white;
-        border: none;
-        border-radius: 8px;
-        font-weight: 600;
-        padding: 0.5rem 1rem;
-        transition: all 0.3s ease;
+        color: white; border: none; border-radius: 8px; font-weight: 600; padding: 0.5rem 1rem;
     }
-    .stButton>button:hover {
-        opacity: 0.9;
-        transform: translateY(-1px);
-    }
-    .credit-box {
-        background: #1E293B;
-        border-radius: 10px;
-        padding: 20px;
-        border: 1px solid #334155;
-        margin-bottom: 15px;
-    }
-    .tier-badge-pro {
-        background-color: #581C87;
-        color: #E9D5FF;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 0.85rem;
-        font-weight: 600;
-    }
-    .tier-badge-infinity {
-        background-color: #713F12;
-        color: #FEF08A;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 0.85rem;
-        font-weight: 600;
-    }
-    .tier-badge-free {
-        background-color: #1E293B;
-        color: #94A3B8;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 0.85rem;
-        font-weight: 600;
-    }
+    .credit-box { background: #1E293B; border-radius: 10px; padding: 20px; border: 1px solid #334155; margin-bottom: 15px; }
+    .tier-badge-pro { background-color: #581C87; color: #E9D5FF; padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 600; }
+    .tier-badge-infinity { background-color: #713F12; color: #FEF08A; padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 600; }
+    .tier-badge-free { background-color: #1E293B; color: #94A3B8; padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 600; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -95,23 +49,16 @@ def sync_user_profile(user_id, email):
         "max_daily_credits": 1000,
         "total_messages_sent": 0
     }
-
     try:
         res = supabase.table("user_profiles").select("*").eq("id", user_id).execute()
         if res.data and len(res.data) > 0:
             return res.data[0]
         
-        upsert_res = supabase.table("user_profiles").upsert(
-            profile_payload, 
-            on_conflict="id"
-        ).execute()
-        
+        upsert_res = supabase.table("user_profiles").upsert(profile_payload, on_conflict="id").execute()
         if upsert_res.data and len(upsert_res.data) > 0:
             return upsert_res.data[0]
-            
     except Exception:
         pass
-        
     return profile_payload
 
 
@@ -138,8 +85,8 @@ if "user_id" in query_params and "user" not in st.session_state:
 if "payment" in query_params and query_params["payment"] == "success":
     paid_tier = query_params.get("tier", "pro")
     
-    if "user_id" in st.session_state:
-        target_uid = st.session_state.user_id
+    if "user_id" in st.session_state or "user_id" in query_params:
+        target_uid = st.session_state.get("user_id", query_params.get("user_id"))
         credits_cap = 3000000 if paid_tier == "infinity" else 1000000
         
         if "profile" in st.session_state:
@@ -149,9 +96,9 @@ if "payment" in query_params and query_params["payment"] == "success":
 
         try:
             supabase.table("user_profiles").update({
-                "tier": paid_tier,
-                "credits_remaining": credits_cap,
-                "max_daily_credits": credits_cap
+                "tier": str(paid_tier),
+                "credits_remaining": int(credits_cap),
+                "max_daily_credits": int(credits_cap)
             }).eq("id", target_uid).execute()
         except Exception:
             pass
@@ -262,47 +209,39 @@ else:
     st.sidebar.metric("Daily Credit Capacity", f"{profile['credits_remaining']:,} / {profile['max_daily_credits']:,}")
     st.sidebar.metric("Total Prompts Processed", f"{profile['total_messages_sent']:,}")
 
-    # ─── TERMINAL PAGE (CONDITIONAL BY TIER) ───
+    # ─── TERMINAL PAGE ───
     if page == "🤖 Chat Core Terminal":
         
-        # Display Dynamic Header Features based on Active Tier
         if user_tier == "infinity":
             st.markdown("""
-                <div style='display: flex; align-items: center; justify-content: space-between; background: #121000; border: 1px solid #FFD700; padding: 12px 20px; border-radius: 10px; margin-bottom: 20px;'>
-                    <div>
-                        <span class='tier-badge-infinity'>🔥 INFINITY ENGINE UNLOCKED</span>
-                        <p style='margin: 5px 0 0 0; font-size: 0.9rem; color: #E2E8F0;'>Maximum Context Window (1,500 Tokens) • Priority Processing • Uncapped Multi-Agent Capabilities</p>
-                    </div>
+                <div style='background: #121000; border: 1px solid #FFD700; padding: 12px 20px; border-radius: 10px; margin-bottom: 20px;'>
+                    <span class='tier-badge-infinity'>🔥 INFINITY ENGINE UNLOCKED</span>
+                    <p style='margin: 5px 0 0 0; font-size: 0.9rem; color: #E2E8F0;'>Maximum Context Window (1,500 Tokens) • Priority Processing • Uncapped Agent Capabilities</p>
                 </div>
             """, unsafe_allow_html=True)
             max_response_tokens = 1500
-            system_persona = "You are Torqix AI operating in 🔥 INFINITY ENGINE MODE. You possess maximum computational output, deep analytical depth, and comprehensive execution capabilities. Assist the builder with unlimited precision."
+            system_persona = "You are Torqix AI operating in 🔥 INFINITY ENGINE MODE. You possess maximum computational output, deep analytical depth, and execution capabilities. Assist the builder with precision."
 
         elif user_tier == "pro":
             st.markdown("""
-                <div style='display: flex; align-items: center; justify-content: space-between; background: #0C0812; border: 1px solid #A020F0; padding: 12px 20px; border-radius: 10px; margin-bottom: 20px;'>
-                    <div>
-                        <span class='tier-badge-pro'>👑 PRO TERMINAL ACTIVE</span>
-                        <p style='margin: 5px 0 0 0; font-size: 0.9rem; color: #E2E8F0;'>Expanded Output Window (1,000 Tokens) • Accelerated Pipeline Priority</p>
-                    </div>
+                <div style='background: #0C0812; border: 1px solid #A020F0; padding: 12px 20px; border-radius: 10px; margin-bottom: 20px;'>
+                    <span class='tier-badge-pro'>👑 PRO TERMINAL ACTIVE</span>
+                    <p style='margin: 5px 0 0 0; font-size: 0.9rem; color: #E2E8F0;'>Expanded Output Window (1,000 Tokens) • Accelerated Pipeline Priority</p>
                 </div>
             """, unsafe_allow_html=True)
             max_response_tokens = 1000
-            system_persona = "You are Torqix AI operating in 👑 PRO MODE. You deliver fast, expanded high-performance code, architectural plans, and insights tailored for builders."
+            system_persona = "You are Torqix AI operating in 👑 PRO MODE. You deliver fast, expanded high-performance code and insights."
 
         else:
             st.markdown("""
-                <div style='display: flex; align-items: center; justify-content: space-between; background: #111827; border: 1px solid #334155; padding: 12px 20px; border-radius: 10px; margin-bottom: 20px;'>
-                    <div>
-                        <span class='tier-badge-free'>STANDARD TERMINAL</span>
-                        <p style='margin: 5px 0 0 0; font-size: 0.9rem; color: #94A3B8;'>Standard Rate Limit • 500 Token Output Cap</p>
-                    </div>
+                <div style='background: #111827; border: 1px solid #334155; padding: 12px 20px; border-radius: 10px; margin-bottom: 20px;'>
+                    <span class='tier-badge-free'>STANDARD TERMINAL</span>
+                    <p style='margin: 5px 0 0 0; font-size: 0.9rem; color: #94A3B8;'>Standard Rate Limit • 500 Token Output Cap</p>
                 </div>
             """, unsafe_allow_html=True)
             max_response_tokens = 500
             system_persona = "You are Torqix AI, an intelligent assistant created specifically for disciplined builders and developers. Always refer to yourself strictly as Torqix AI."
 
-        # Terminal Chat Loop
         if profile["credits_remaining"] < 10:
             st.error("⚠️ Daily credit balance depleted. Upgrade your parameters in the Subscription Portal to continue.")
         else:
@@ -336,9 +275,7 @@ else:
                     st.write(reply)
                 st.session_state.messages.append({"role": "assistant", "content": reply})
 
-                # Credit Deduction based on tier utilization
-                cost_per_message = 10
-                st.session_state.profile["credits_remaining"] -= cost_per_message
+                st.session_state.profile["credits_remaining"] -= 10
                 st.session_state.profile["total_messages_sent"] += 1
                 
                 update_user_credits(
