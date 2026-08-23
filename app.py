@@ -2,39 +2,12 @@ import streamlit as st
 import os
 from supabase import create_client, Client
 from groq import Groq
-import streamlit.components.v1 as components
 
 # Initialize cloud integrations safely via secrets
 supabase: Client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
 st.set_page_config(page_title="Torqix AI Workspace", page_icon="🚀", layout="wide")
-
-# ─── JS BRIDGE: CONVERT HASH FRAGMENT TO QUERY PARAMS ───
-# Fixes Streamlit ignoring #access_token= by automatically reloading to ?access_token=
-components.html("""
-<script>
-    if (window.location.hash.includes('access_token')) {
-        const hashParams = new URLSearchParams(window.location.hash.substring(1));
-        const token = hashParams.get('access_token');
-        const refresh = hashParams.get('refresh_token');
-        window.location.href = window.location.origin + window.location.pathname + '?access_token=' + token + '&refresh_token=' + refresh;
-    }
-</script>
-""", height=0)
-
-# Catch converted tokens from query parameters
-if "user" not in st.session_state:
-    if "access_token" in st.query_params:
-        try:
-            token = st.query_params["access_token"]
-            refresh = st.query_params.get("refresh_token", "")
-            session = supabase.auth.set_session(token, refresh)
-            st.session_state.user = session.user
-            st.query_params.clear()
-            st.rerun()
-        except Exception as e:
-            st.error(f"Failed to authenticate session: {e}")
 
 # --- BRAND HEADER LAYOUT ---
 logo_path = "logo.png"
@@ -52,26 +25,55 @@ else:
 
 st.markdown("<hr style='border-top: 1px solid #121214;'>", unsafe_allow_html=True)
 
-# --- GOOGLE AUTHENTICATION LAYER ---
+# --- NATIVE AUTHENTICATION LAYER ---
 if "user" not in st.session_state:
     st.subheader("🔒 Access the Torqix System Portal")
-    st.write("Sign in with your Google account to log performance data, calculate credit balances, and initialize your workspace.")
+    st.write("Enter your credentials to access your workspace.")
     
-    if st.button("Sign in with Google"):
-        try:
-            res = supabase.auth.sign_in_with_oauth({
-                "provider": "google",
-                "options": {
-                    "redirect_to": "https://torqix-ai.streamlit.app"
-                }
-            })
-            auth_url = res.url
-            st.write(f"[👉 Click here to login securely via Google]({auth_url})")
-        except Exception as e:
-            st.error(f"Authentication engine connection issue: {e}")
+    auth_tab1, auth_tab2 = st.tabs(["Sign In", "Create Account"])
+    
+    with auth_tab1:
+        login_email = st.text_input("Email Address", key="login_email")
+        login_password = st.text_input("Password", type="password", key="login_password")
+        
+        if st.button("Sign In to Torqix"):
+            try:
+                res = supabase.auth.sign_in_with_password({
+                    "email": login_email,
+                    "password": login_password
+                })
+                st.session_state.user = res.user
+                st.success("Successfully logged in!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Login failed: {e}")
+
+    with auth_tab2:
+        signup_email = st.text_input("Email Address", key="signup_email")
+        signup_password = st.text_input("Password", type="password", key="signup_password")
+        
+        if st.button("Create Account"):
+            try:
+                res = supabase.auth.sign_up({
+                    "email": signup_email,
+                    "password": signup_password
+                })
+                if res.user:
+                    st.session_state.user = res.user
+                    st.success("Account created successfully!")
+                    st.rerun()
+            except Exception as e:
+                st.error(f"Account creation failed: {e}")
+
 else:
     user_id = st.session_state.user.id
     user_email = st.session_state.user.email
+
+    # Logout Button in Sidebar
+    if st.sidebar.button("Log Out"):
+        supabase.auth.sign_out()
+        del st.session_state["user"]
+        st.rerun()
 
     # Initialize user profile record in database if it doesn't exist
     try:
