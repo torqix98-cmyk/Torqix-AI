@@ -2,7 +2,6 @@ import streamlit as st
 import os
 from supabase import create_client, Client
 from groq import Groq
-from streamlit_js_eval import streamlit_js_eval
 
 # Initialize cloud integrations safely via secrets
 supabase: Client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
@@ -10,25 +9,17 @@ groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
 st.set_page_config(page_title="Torqix AI Workspace", page_icon="🚀", layout="wide")
 
-# ─── PARSE TOKENS FROM HASH FRAGMENTS ───
+# ─── PARSE AUTH CODE FROM QUERY PARAMETERS (PKCE FLOW) ───
 if "user" not in st.session_state:
-    # Safely pull the full window location href string from the client browser
-    current_href = streamlit_js_eval(js_expressions="window.location.href", want_output=True, key="get_href")
-    
-    if current_href and "#access_token=" in current_href:
+    if "code" in st.query_params:
         try:
-            # Isolate the access token segment out of the hashtag fragment string
-            fragment = current_href.split("#")[1]
-            params = dict(x.split("=") for x in fragment.split("&"))
-            access_token = params.get("access_token")
-            
-            if access_token:
-                # Log session details directly into Supabase cache memory
-                session = supabase.auth.set_session(access_token)
-                st.session_state.user = session.user
-                st.rerun()
-        except Exception:
-            pass
+            auth_code = st.query_params["code"]
+            session = supabase.auth.exchange_code_for_session({"auth_code": auth_code})
+            st.session_state.user = session.user
+            st.query_params.clear()
+            st.rerun()
+        except Exception as e:
+            st.error(f"Failed to authenticate session: {e}")
 
 # --- BRAND HEADER LAYOUT ---
 logo_path = "logo.png"
@@ -53,7 +44,13 @@ if "user" not in st.session_state:
     
     if st.button("Sign in with Google"):
         try:
-            res = supabase.auth.sign_in_with_oauth({"provider": "google"})
+            res = supabase.auth.sign_in_with_oauth({
+                "provider": "google",
+                "options": {
+                    "redirect_to": "https://torqix-ai.streamlit.app",
+                    "flow_type": "pkce"
+                }
+            })
             auth_url = res.url
             st.write(f"[👉 Click here to login securely via Google]({auth_url})")
         except Exception as e:
@@ -77,9 +74,9 @@ else:
         supabase.table("user_profiles").insert(new_profile).execute()
         profile_data = new_profile
 
-    tier = profile_data["tier"]
-    credits = profile_data["credits_remaining"]
-    max_credits = profile_data["max_daily_credits"]
+    tier = profile_data.get("tier", "free")
+    credits = profile_data.get("credits_remaining", 1000)
+    max_credits = profile_data.get("max_daily_credits", 1000)
     msg_count = profile_data.get("total_messages_sent", 0)
 
     # --- BRAND NAVIGATION CONTROL PANEL ---
@@ -120,7 +117,7 @@ else:
                     model="llama3-8b-8192",
                     messages=[{"role": "user", "content": user_prompt}]
                 )
-                ai_reply = completion.choices.message.content
+                ai_reply = completion.choices[0].message.content
 
                 with st.chat_message("assistant"):
                     st.write(ai_reply)
@@ -143,12 +140,12 @@ else:
             if st.button("Simulate Successful Pro Payment"):
                 supabase.table("user_profiles").update({"tier": "pro", "max_daily_credits": 1000000, "credits_remaining": 1000000}).eq("id", user_id).execute()
                 st.success("Account status scaled to Pro!")
-                st.button("Click to Refresh UI Dashboard")
+                st.rerun()
         with mock_col2:
             if st.button("Simulate Successful Infinity Payment"):
                 supabase.table("user_profiles").update({"tier": "infinity", "max_daily_credits": 3000000, "credits_remaining": 3000000}).eq("id", user_id).execute()
                 st.success("Account status scaled to Infinity!")
-                st.button("Click to Refresh UI Dashboard")
+                st.rerun()
 
         st.markdown("---")
 
