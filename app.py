@@ -317,7 +317,7 @@ else:
             if user_tier == "pro":
                 st.button("Active Plan", disabled=True, key="pro_active")
             else:
-                st.link_button("Upgrade to Pro", f"https://buy.stripe.com/test_5kQeVd2VR24OeCJ67W8IU00={pro_redirect}")
+                st.link_button("Upgrade to Pro", "https://buy.stripe.com/test_5kQeVd2VR24OeCJ67W8IU00")
             st.markdown("</div>", unsafe_allow_html=True)
 
         with col3:
@@ -331,5 +331,5 @@ else:
             if user_tier == "infinity":
                 st.button("Active Plan", disabled=True, key="inf_active")
             else:
-                st.link_button("Unlock Infinity Tier", f"https://buy.stripe.com/test_dRm3cv9kf38S8el67W8IU02={infinity_redirect}")
+                st.link_button("Unlock Infinity Tier", "https://buy.stripe.com/test_dRm3cv9kf38S8el67W8IU02")
             st.markdown("</div>", unsafe_allow_html=True)
