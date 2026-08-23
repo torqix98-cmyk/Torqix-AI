@@ -222,6 +222,6 @@ else:
             st.write("• Absolute queue bypass execution priorities")
             st.write("• Complete structural tracking capacity")
             
-            infinity_stripe_url = "https://buy.stripe.com/test_5kQ14n8gbaBkgKR53S8IU01"
+            infinity_stripe_url = "https://buy.stripe.com/test_dRm3cv9kf38S8el67W8IU02"
             st.link_button("Unlock Infinite Workspace", infinity_stripe_url)
             st.markdown("</div>", unsafe_allow_html=True)
