@@ -31,7 +31,9 @@ if "user" not in st.session_state:
     st.write("Sign in with your Google account to log performance data, calculate credit balances, and initialize your workspace.")
     
     if st.button("Sign in with Google"):
-        auth_url = supabase.auth.get_oauth_nav_url(provider="google")
+        # This generates the login link using the newest library standard
+res = supabase.auth.sign_in_with_oauth({"provider": "google"})
+auth_url = res.url
         st.write(f"[👉 Click here to login securely via Google]({auth_url})")
 else:
     user_id = st.session_state.user.id
