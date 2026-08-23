@@ -2,6 +2,7 @@ import streamlit as st
 import os
 from supabase import create_client, Client
 from groq import Groq
+import streamlit.components.v1 as components
 
 # Initialize cloud integrations safely via secrets
 supabase: Client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
@@ -9,12 +10,26 @@ groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
 st.set_page_config(page_title="Torqix AI Workspace", page_icon="🚀", layout="wide")
 
-# ─── PARSE AUTH CODE FROM QUERY PARAMETERS (PKCE FLOW) ───
+# ─── JS BRIDGE: CONVERT HASH FRAGMENT TO QUERY PARAMS ───
+# Fixes Streamlit ignoring #access_token= by automatically reloading to ?access_token=
+components.html("""
+<script>
+    if (window.location.hash.includes('access_token')) {
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const token = hashParams.get('access_token');
+        const refresh = hashParams.get('refresh_token');
+        window.location.href = window.location.origin + window.location.pathname + '?access_token=' + token + '&refresh_token=' + refresh;
+    }
+</script>
+""", height=0)
+
+# Catch converted tokens from query parameters
 if "user" not in st.session_state:
-    if "code" in st.query_params:
+    if "access_token" in st.query_params:
         try:
-            auth_code = st.query_params["code"]
-            session = supabase.auth.exchange_code_for_session({"auth_code": auth_code})
+            token = st.query_params["access_token"]
+            refresh = st.query_params.get("refresh_token", "")
+            session = supabase.auth.set_session(token, refresh)
             st.session_state.user = session.user
             st.query_params.clear()
             st.rerun()
@@ -47,8 +62,7 @@ if "user" not in st.session_state:
             res = supabase.auth.sign_in_with_oauth({
                 "provider": "google",
                 "options": {
-                    "redirect_to": "https://torqix-ai.streamlit.app",
-                    "flow_type": "pkce"
+                    "redirect_to": "https://torqix-ai.streamlit.app"
                 }
             })
             auth_url = res.url
