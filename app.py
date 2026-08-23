@@ -48,6 +48,30 @@ st.markdown("""
         border: 1px solid #334155;
         margin-bottom: 15px;
     }
+    .tier-badge-pro {
+        background-color: #581C87;
+        color: #E9D5FF;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    .tier-badge-infinity {
+        background-color: #713F12;
+        color: #FEF08A;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    .tier-badge-free {
+        background-color: #1E293B;
+        color: #94A3B8;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -63,7 +87,6 @@ APP_URL = "https://torqix-ai.streamlit.app"
 
 # ─── DATABASE HELPER FUNCTIONS ───
 def sync_user_profile(user_id, email):
-    """Retrieves or upserts user details into public.user_profiles without data loss."""
     profile_payload = {
         "id": str(user_id),
         "email": str(email),
@@ -93,7 +116,6 @@ def sync_user_profile(user_id, email):
 
 
 def update_user_credits(user_id, new_credits, total_messages):
-    """Syncs credit deductions and message counters to Supabase."""
     try:
         supabase.table("user_profiles").update({
             "credits_remaining": new_credits,
@@ -134,7 +156,7 @@ if "payment" in query_params and query_params["payment"] == "success":
         except Exception:
             pass
             
-        st.toast(f"🎉 Payment Verified! Welcome to Torqix {paid_tier.upper()} Tier.", icon="🔥")
+        st.toast(f"🎉 Upgrade Confirmed! Switched to Torqix {paid_tier.upper()} mode.", icon="🔥")
 
 # ─── BRAND HEADER ───
 col_logo, col_title = st.columns([1, 6])
@@ -212,6 +234,7 @@ else:
         st.session_state.profile = sync_user_profile(user_id, user_email)
 
     profile = st.session_state.profile
+    user_tier = profile.get("tier", "free")
 
     st.sidebar.markdown("### 🚀 Torqix Control Center")
     page = st.sidebar.radio("Navigation", ["🤖 Chat Core Terminal", "💎 Subscriptions & Billing"])
@@ -229,9 +252,9 @@ else:
     st.sidebar.markdown("---")
     st.sidebar.markdown("### 📋 System Telemetry")
     
-    if profile['tier'] == 'infinity':
+    if user_tier == 'infinity':
         st.sidebar.markdown("### Tier: <span style='color:#FFD700;'>🔥 TORQIX INFINITY</span>", unsafe_allow_html=True)
-    elif profile['tier'] == 'pro':
+    elif user_tier == 'pro':
         st.sidebar.markdown("### Tier: <span style='color:#A020F0;'>👑 TORQIX PRO</span>", unsafe_allow_html=True)
     else:
         st.sidebar.markdown("### Tier: <span style='color:#808495;'>STANDARD EXPLORER</span>", unsafe_allow_html=True)
@@ -239,10 +262,49 @@ else:
     st.sidebar.metric("Daily Credit Capacity", f"{profile['credits_remaining']:,} / {profile['max_daily_credits']:,}")
     st.sidebar.metric("Total Prompts Processed", f"{profile['total_messages_sent']:,}")
 
-    # ─── TERMINAL PAGE ───
+    # ─── TERMINAL PAGE (CONDITIONAL BY TIER) ───
     if page == "🤖 Chat Core Terminal":
+        
+        # Display Dynamic Header Features based on Active Tier
+        if user_tier == "infinity":
+            st.markdown("""
+                <div style='display: flex; align-items: center; justify-content: space-between; background: #121000; border: 1px solid #FFD700; padding: 12px 20px; border-radius: 10px; margin-bottom: 20px;'>
+                    <div>
+                        <span class='tier-badge-infinity'>🔥 INFINITY ENGINE UNLOCKED</span>
+                        <p style='margin: 5px 0 0 0; font-size: 0.9rem; color: #E2E8F0;'>Maximum Context Window (1,500 Tokens) • Priority Processing • Uncapped Multi-Agent Capabilities</p>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+            max_response_tokens = 1500
+            system_persona = "You are Torqix AI operating in 🔥 INFINITY ENGINE MODE. You possess maximum computational output, deep analytical depth, and comprehensive execution capabilities. Assist the builder with unlimited precision."
+
+        elif user_tier == "pro":
+            st.markdown("""
+                <div style='display: flex; align-items: center; justify-content: space-between; background: #0C0812; border: 1px solid #A020F0; padding: 12px 20px; border-radius: 10px; margin-bottom: 20px;'>
+                    <div>
+                        <span class='tier-badge-pro'>👑 PRO TERMINAL ACTIVE</span>
+                        <p style='margin: 5px 0 0 0; font-size: 0.9rem; color: #E2E8F0;'>Expanded Output Window (1,000 Tokens) • Accelerated Pipeline Priority</p>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+            max_response_tokens = 1000
+            system_persona = "You are Torqix AI operating in 👑 PRO MODE. You deliver fast, expanded high-performance code, architectural plans, and insights tailored for builders."
+
+        else:
+            st.markdown("""
+                <div style='display: flex; align-items: center; justify-content: space-between; background: #111827; border: 1px solid #334155; padding: 12px 20px; border-radius: 10px; margin-bottom: 20px;'>
+                    <div>
+                        <span class='tier-badge-free'>STANDARD TERMINAL</span>
+                        <p style='margin: 5px 0 0 0; font-size: 0.9rem; color: #94A3B8;'>Standard Rate Limit • 500 Token Output Cap</p>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+            max_response_tokens = 500
+            system_persona = "You are Torqix AI, an intelligent assistant created specifically for disciplined builders and developers. Always refer to yourself strictly as Torqix AI."
+
+        # Terminal Chat Loop
         if profile["credits_remaining"] < 10:
-            st.error("⚠️ Daily credit balance depleted. Upgrade your parameters in the Subscription Portal.")
+            st.error("⚠️ Daily credit balance depleted. Upgrade your parameters in the Subscription Portal to continue.")
         else:
             if "messages" not in st.session_state:
                 st.session_state.messages = []
@@ -251,21 +313,19 @@ else:
                 with st.chat_message(msg["role"]):
                     st.write(msg["content"])
 
-            if prompt := st.chat_input("Command Torqix AI..."):
+            if prompt := st.chat_input(f"Command Torqix AI ({user_tier.upper()} Mode)..."):
                 with st.chat_message("user"):
                     st.write(prompt)
                 st.session_state.messages.append({"role": "user", "content": prompt})
 
-                formatted_messages = [
-                    {"role": "system", "content": "You are Torqix AI, an elite AI engine designed to assist disciplined builders, developers, and creators. Always introduce and refer to yourself strictly as Torqix AI."}
-                ]
+                formatted_messages = [{"role": "system", "content": system_persona}]
                 for m in st.session_state.messages:
                     formatted_messages.append({"role": m["role"], "content": m["content"]})
 
                 try:
                     res = hf_client.chat_completion(
                         messages=formatted_messages,
-                        max_tokens=700,
+                        max_tokens=max_response_tokens,
                         stream=False
                     )
                     reply = res.choices[0].message.content
@@ -276,8 +336,9 @@ else:
                     st.write(reply)
                 st.session_state.messages.append({"role": "assistant", "content": reply})
 
-                # Deduct credits locally and sync to database
-                st.session_state.profile["credits_remaining"] -= 10
+                # Credit Deduction based on tier utilization
+                cost_per_message = 10
+                st.session_state.profile["credits_remaining"] -= cost_per_message
                 st.session_state.profile["total_messages_sent"] += 1
                 
                 update_user_credits(
@@ -290,8 +351,8 @@ else:
 
     # ─── BILLING PAGE ───
     elif page == "💎 Subscriptions & Billing":
-        st.subheader("💎 Scale Computational System Ceilings")
-        st.write("Select an operational tier below. When completed, you will automatically return directly to your AI session with unlocked privileges.")
+        st.subheader("💎 Operational Tiers & Computational Systems")
+        st.write("Upgrading automatically switches your active terminal environment and unlocks higher token allowances.")
 
         col1, col2, col3 = st.columns(3)
 
@@ -303,8 +364,10 @@ else:
             st.markdown("### Standard Explorer")
             st.markdown("<h2>Free</h2>", unsafe_allow_html=True)
             st.write("• 1,000 Daily Credits")
-            st.write("• Standard AI throughput")
-            st.button("Active Plan", disabled=True)
+            st.write("• 500 Token Output Cap")
+            st.write("• Standard Processing Queue")
+            if user_tier == "free":
+                st.button("Active Plan", disabled=True, key="free_active")
             st.markdown("</div>", unsafe_allow_html=True)
 
         with col2:
@@ -312,9 +375,12 @@ else:
             st.markdown("<h3 style='color:#A020F0;'>👑 TORQIX Pro</h3>", unsafe_allow_html=True)
             st.markdown("<h2>₹499 <span style='font-size:14px;color:#94A3B8;'>/mo</span></h2>", unsafe_allow_html=True)
             st.write("• 1,000,000 Daily Credits")
-            st.write("• High-priority queue lanes")
-            
-            st.link_button("Upgrade to Pro", f"https://buy.stripe.com/test_5kQeVd2VR24OeCJ67W8IU00={pro_redirect}")
+            st.write("• 1,000 Token Output Cap")
+            st.write("• Accelerated Priority Pipeline")
+            if user_tier == "pro":
+                st.button("Active Plan", disabled=True, key="pro_active")
+            else:
+                st.link_button("Upgrade to Pro", f"https://buy.stripe.com/test_5kQeVd2VR24OeCJ67W8IU00={pro_redirect}")
             st.markdown("</div>", unsafe_allow_html=True)
 
         with col3:
@@ -322,8 +388,11 @@ else:
             st.markdown("<h3 style='color:#FFD700;'>🔥 TORQIX Infinity</h3>", unsafe_allow_html=True)
             st.markdown("<h2>₹999 <span style='font-size:14px;color:#94A3B8;'>/mo</span></h2>", unsafe_allow_html=True)
             st.write("• 3,000,000 Daily Credits")
-            st.write("• Uncapped priority inference engine")
-            st.write("• Dedicated priority developer support")
-            
-            st.link_button("Unlock Infinity Tier", f"https://buy.stripe.com/test_dRm3cv9kf38S8el67W8IU02={infinity_redirect}")
+            st.write("• 1,500 Max Token Output")
+            st.write("• Deep Analytical Reasoning Mode")
+            st.write("• Maximum Queue Bypass")
+            if user_tier == "infinity":
+                st.button("Active Plan", disabled=True, key="inf_active")
+            else:
+                st.link_button("Unlock Infinity Tier", f"https://buy.stripe.com/test_dRm3cv9kf38S8el67W8IU02={infinity_redirect}")
             st.markdown("</div>", unsafe_allow_html=True)
