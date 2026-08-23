@@ -11,7 +11,7 @@ st.set_page_config(page_title="Torqix AI Workspace", page_icon="🚀", layout="w
 
 # --- BRAND HEADER LAYOUT ---
 logo_path = "logo.png"
-logo_col, text_col = st.columns()
+logo_col, text_col = st.columns([1, 5])
 
 with logo_col:
     if os.path.exists(logo_path):
