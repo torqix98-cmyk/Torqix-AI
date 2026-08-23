@@ -2,6 +2,7 @@ import streamlit as st
 import os
 from supabase import create_client, Client
 from groq import Groq
+from streamlit_js_eval import streamlit_js_eval
 
 # Initialize cloud integrations safely via secrets
 supabase: Client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
@@ -9,21 +10,25 @@ groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
 st.set_page_config(page_title="Torqix AI Workspace", page_icon="🚀", layout="wide")
 
-# ─── NEW: CAPTURE GOOGLE REDIRECT TOKENS FROM URL ───
-# This listens to the incoming URL flags sent back by Supabase and logs the user in
-url_params = st.query_params
-if "access_token" in url_params or "#access_token" in url_params:
-    try:
-        # Pull parameters safely from the web query string
-        token = url_params.get("access_token") or url_params.get("#access_token")
-        # Authenticate session dynamically within the active tab memory
-        session = supabase.auth.set_session(token)
-        st.session_state.user = session.user
-        # Clear query parameters clean so the URL looks completely professional
-        st.query_params.clear()
-        st.rerun()
-    except Exception as e:
-        pass
+# ─── PARSE TOKENS FROM HASH FRAGMENTS ───
+if "user" not in st.session_state:
+    # Safely pull the full window location href string from the client browser
+    current_href = streamlit_js_eval(js_expressions="window.location.href", want_output=True, key="get_href")
+    
+    if current_href and "#access_token=" in current_href:
+        try:
+            # Isolate the access token segment out of the hashtag fragment string
+            fragment = current_href.split("#")[1]
+            params = dict(x.split("=") for x in fragment.split("&"))
+            access_token = params.get("access_token")
+            
+            if access_token:
+                # Log session details directly into Supabase cache memory
+                session = supabase.auth.set_session(access_token)
+                st.session_state.user = session.user
+                st.rerun()
+        except Exception:
+            pass
 
 # --- BRAND HEADER LAYOUT ---
 logo_path = "logo.png"
@@ -43,7 +48,7 @@ st.markdown("<hr style='border-top: 1px solid #121214;'>", unsafe_allow_html=Tru
 
 # --- GOOGLE AUTHENTICATION LAYER ---
 if "user" not in st.session_state:
-    st.subheader("🔒 Access the Torqix Brand Ecosystem")
+    st.subheader("🔒 Access the Torqix System Portal")
     st.write("Sign in with your Google account to log performance data, calculate credit balances, and initialize your workspace.")
     
     if st.button("Sign in with Google"):
@@ -83,7 +88,6 @@ else:
     st.sidebar.markdown("---")
     st.sidebar.subheader("📋 Account Balance")
     
-    # Render Tier badges dynamically
     if tier == "free":
         st.sidebar.markdown("### Tier: <span style='color:#808495;'>Standard Explorer</span>", unsafe_allow_html=True)
     elif tier == "pro":
@@ -98,7 +102,7 @@ else:
     # --- BRAND VIEW 1: ADVANCED CHAT INTERFACE ---
     if page == "🤖 Chat Core Terminal":
         if credits < 10:
-            st.error("⚠️ Daily credit limitations hit (100 responses maxed out). Upgrade execution parameters in the Subscription Portal to resume system operations.")
+            st.error("⚠️ Daily credit limitations hit. Upgrade execution parameters in the Subscription Portal to resume system operations.")
         else:
             if "messages" not in st.session_state:
                 st.session_state.messages = []
@@ -112,7 +116,6 @@ else:
                     st.write(user_prompt)
                 st.session_state.messages.append({"role": "user", "content": user_prompt})
 
-                # Stream response from high-speed Llama cloud nodes
                 completion = groq_client.chat.completions.create(
                     model="llama3-8b-8192",
                     messages=[{"role": "user", "content": user_prompt}]
@@ -123,7 +126,6 @@ else:
                     st.write(ai_reply)
                 st.session_state.messages.append({"role": "assistant", "content": ai_reply})
 
-                # Deduct exactly 10 points per exchange and iterate account counter tracking metrics
                 supabase.table("user_profiles").update({
                     "credits_remaining": credits - 10,
                     "total_messages_sent": msg_count + 1
@@ -135,7 +137,6 @@ else:
         st.subheader("💎 Scale Computational System Ceilings")
         st.write("Upgrade your metrics dashboard pipelines to support massive asset production workflows.")
         
-        # Admin sandbox simulation testing mechanism
         st.warning("🧪 Stripe Test Mode Sandbox: Run Mock Payment Upgrade Below")
         mock_col1, mock_col2 = st.columns(2)
         with mock_col1:
@@ -171,7 +172,6 @@ else:
             st.write("• Accelerated cloud priority lanes")
             st.write("• Scaled operational execution metrics")
             
-            # Paste your live test link from your Stripe dashboard below
             pro_stripe_url = "https://buy.stripe.com/test_5kQeVd2VR24OeCJ67W8IU00"
             st.link_button("Upgrade to Pro Tier", pro_stripe_url)
             st.markdown("</div>", unsafe_allow_html=True)
@@ -184,7 +184,6 @@ else:
             st.write("• Absolute queue bypass execution priorities")
             st.write("• Complete structural tracking capacity")
             
-            # Paste your live test link from your Stripe dashboard below
             infinity_stripe_url = "https://buy.stripe.com/test_5kQ14n8gbaBkgKR53S8IU01"
             st.link_button("Unlock Infinite Workspace", infinity_stripe_url)
             st.markdown("</div>", unsafe_allow_html=True)
