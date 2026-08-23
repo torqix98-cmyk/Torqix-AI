@@ -9,19 +9,33 @@ groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
 st.set_page_config(page_title="Torqix AI Workspace", page_icon="🚀", layout="wide")
 
+# ─── NEW: CAPTURE GOOGLE REDIRECT TOKENS FROM URL ───
+# This listens to the incoming URL flags sent back by Supabase and logs the user in
+url_params = st.query_params
+if "access_token" in url_params or "#access_token" in url_params:
+    try:
+        # Pull parameters safely from the web query string
+        token = url_params.get("access_token") or url_params.get("#access_token")
+        # Authenticate session dynamically within the active tab memory
+        session = supabase.auth.set_session(token)
+        st.session_state.user = session.user
+        # Clear query parameters clean so the URL looks completely professional
+        st.query_params.clear()
+        st.rerun()
+    except Exception as e:
+        pass
+
 # --- BRAND HEADER LAYOUT ---
 logo_path = "logo.png"
 
-# Setup clean layouts to place header text inline with your logo
 if os.path.exists(logo_path):
-    logo_col, text_col = st.columns([1, 10])
+    logo_col, text_col = st.columns([1, 5])
     with logo_col:
         st.image(logo_path, width=90)
     with text_col:
         st.markdown("<h1 style='margin-bottom: 0px; color: #FFFFFF;'>TORQIX AI</h1>", unsafe_allow_html=True)
         st.markdown("<p style='color: #A020F0; font-size: 1.2rem; font-weight: bold; margin-top: 0px;'>The AI Engine for Disciplined Builders</p>", unsafe_allow_html=True)
 else:
-    # Fail-safe layout: Only text loads if logo.png is uncommitted
     st.markdown("<h1 style='margin-bottom: 0px; color: #FFFFFF;'>TORQIX AI</h1>", unsafe_allow_html=True)
     st.markdown("<p style='color: #A020F0; font-size: 1.2rem; font-weight: bold; margin-top: 0px;'>The AI Engine for Disciplined Builders</p>", unsafe_allow_html=True)
 
@@ -29,7 +43,7 @@ st.markdown("<hr style='border-top: 1px solid #121214;'>", unsafe_allow_html=Tru
 
 # --- GOOGLE AUTHENTICATION LAYER ---
 if "user" not in st.session_state:
-    st.subheader("🔒 Access the Torqix System Portal")
+    st.subheader("🔒 Access the Torqix Brand Ecosystem")
     st.write("Sign in with your Google account to log performance data, calculate credit balances, and initialize your workspace.")
     
     if st.button("Sign in with Google"):
