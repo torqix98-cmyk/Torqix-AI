@@ -1,11 +1,14 @@
 import streamlit as st
 import os
 from supabase import create_client, Client
-from groq import Groq
+from huggingface_hub import InferenceClient
 
 # Initialize cloud integrations safely via secrets
 supabase: Client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
-groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+hf_client = InferenceClient(
+    model="meta-llama/Llama-3.1-8B-Instruct",
+    token=st.secrets["HF_TOKEN"]
+)
 
 st.set_page_config(page_title="Torqix AI Workspace", page_icon="🚀", layout="wide")
 
@@ -137,12 +140,16 @@ else:
                     st.write(user_prompt)
                 st.session_state.messages.append({"role": "user", "content": user_prompt})
 
-                # Updated model identifier for Groq API
-                completion = groq_client.chat.completions.create(
-                    model="llama-3.1-8b-instant",
-                    messages=[{"role": "user", "content": user_prompt}]
-                )
-                ai_reply = completion.choices[0].message.content
+                # Hugging Face Inference API Stream Processing
+                try:
+                    response_stream = hf_client.chat_completion(
+                        messages=[{"role": "user", "content": user_prompt}],
+                        max_tokens=500,
+                        stream=False
+                    )
+                    ai_reply = response_stream.choices[0].message.content
+                except Exception as err:
+                    ai_reply = f"Error querying Hugging Face API: {str(err)}"
 
                 with st.chat_message("assistant"):
                     st.write(ai_reply)
