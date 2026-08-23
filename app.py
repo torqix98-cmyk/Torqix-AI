@@ -11,15 +11,17 @@ st.set_page_config(page_title="Torqix AI Workspace", page_icon="🚀", layout="w
 
 # --- BRAND HEADER LAYOUT ---
 logo_path = "logo.png"
-logo_col, text_col = st.columns([1, 5])
 
-with logo_col:
-    if os.path.exists(logo_path):
+# Setup clean layouts to place header text inline with your logo
+if os.path.exists(logo_path):
+    logo_col, text_col = st.columns([1, 10])
+    with logo_col:
         st.image(logo_path, width=90)
-    else:
-        st.title("🔮")
-
-with text_col:
+    with text_col:
+        st.markdown("<h1 style='margin-bottom: 0px; color: #FFFFFF;'>TORQIX AI</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #A020F0; font-size: 1.2rem; font-weight: bold; margin-top: 0px;'>The AI Engine for Disciplined Builders</p>", unsafe_allow_html=True)
+else:
+    # Fail-safe layout: Only text loads if logo.png is uncommitted
     st.markdown("<h1 style='margin-bottom: 0px; color: #FFFFFF;'>TORQIX AI</h1>", unsafe_allow_html=True)
     st.markdown("<p style='color: #A020F0; font-size: 1.2rem; font-weight: bold; margin-top: 0px;'>The AI Engine for Disciplined Builders</p>", unsafe_allow_html=True)
 
@@ -31,10 +33,12 @@ if "user" not in st.session_state:
     st.write("Sign in with your Google account to log performance data, calculate credit balances, and initialize your workspace.")
     
     if st.button("Sign in with Google"):
-        # This generates the login link using the newest library standard
-res = supabase.auth.sign_in_with_oauth({"provider": "google"})
-auth_url = res.url
-        st.write(f"[👉 Click here to login securely via Google]({auth_url})")
+        try:
+            res = supabase.auth.sign_in_with_oauth({"provider": "google"})
+            auth_url = res.url
+            st.write(f"[👉 Click here to login securely via Google]({auth_url})")
+        except Exception as e:
+            st.error(f"Authentication engine connection issue: {e}")
 else:
     user_id = st.session_state.user.id
     user_email = st.session_state.user.email
@@ -57,7 +61,7 @@ else:
     tier = profile_data["tier"]
     credits = profile_data["credits_remaining"]
     max_credits = profile_data["max_daily_credits"]
-    msg_count = profile_data["total_messages_sent"]
+    msg_count = profile_data.get("total_messages_sent", 0)
 
     # --- BRAND NAVIGATION CONTROL PANEL ---
     st.sidebar.title("🚀 Torqix Engine")
@@ -105,7 +109,7 @@ else:
                     st.write(ai_reply)
                 st.session_state.messages.append({"role": "assistant", "content": ai_reply})
 
-                # Deduct transactional balances and iterate application counters
+                # Deduct exactly 10 points per exchange and iterate account counter tracking metrics
                 supabase.table("user_profiles").update({
                     "credits_remaining": credits - 10,
                     "total_messages_sent": msg_count + 1
@@ -117,7 +121,7 @@ else:
         st.subheader("💎 Scale Computational System Ceilings")
         st.write("Upgrade your metrics dashboard pipelines to support massive asset production workflows.")
         
-        # Admin simulator mechanism for testing purposes
+        # Admin sandbox simulation testing mechanism
         st.warning("🧪 Stripe Test Mode Sandbox: Run Mock Payment Upgrade Below")
         mock_col1, mock_col2 = st.columns(2)
         with mock_col1:
@@ -139,9 +143,9 @@ else:
             st.markdown("<div style='border: 1px solid #121214; padding: 20px; border-radius: 10px;'>", unsafe_allow_html=True)
             st.markdown("### Standard Explorer")
             st.markdown("<h1>Free</h1>", unsafe_allow_html=True)
-            st.write("• 1,000 daily default credits")
-            st.write("• Baseline processing speeds")
-            st.write("• Hard capped at 100 requests/day")
+            st.write("• Basic daily operations")
+            st.write("• Cloud queue entry lanes")
+            st.write("• Capped utilization window")
             st.button("Current Active Operations", disabled=True)
             st.markdown("</div>", unsafe_allow_html=True)
             
@@ -149,11 +153,11 @@ else:
             st.markdown("<div style='border: 2px solid #A020F0; padding: 20px; border-radius: 10px; background-color: #0c0812;'>", unsafe_allow_html=True)
             st.markdown("<h3 style='color: #A020F0;'>👑 TORQIX Pro</h3>", unsafe_allow_html=True)
             st.markdown("<h1>₹499 <span style='font-size:12px; color:#808495;'>/mo</span></h1>", unsafe_allow_html=True)
-            st.write("• 1,000,000 credits allocated daily")
-            st.write("• Priority cloud processing lane")
-            st.write("• Production level response volumes")
+            st.write("• Extended throughput volume handling")
+            st.write("• Accelerated cloud priority lanes")
+            st.write("• Scaled operational execution metrics")
             
-            # ⬇️ PASTE YOUR STRIPE PRO LINK HERE ⬇️
+            # Paste your live test link from your Stripe dashboard below
             pro_stripe_url = "https://buy.stripe.com/test_5kQeVd2VR24OeCJ67W8IU00"
             st.link_button("Upgrade to Pro Tier", pro_stripe_url)
             st.markdown("</div>", unsafe_allow_html=True)
@@ -162,11 +166,11 @@ else:
             st.markdown("<div style='border: 2px solid #FFD700; padding: 20px; border-radius: 10px; background-color: #121000;'>", unsafe_allow_html=True)
             st.markdown("<h3 style='color: #FFD700;'>🔥 TORQIX Infinity</h3>", unsafe_allow_html=True)
             st.markdown("<h1>₹999 <span style='font-size:12px; color:#808495;'>/mo</span></h1>", unsafe_allow_html=True)
-            st.write("• Unlimited workspace capabilities")
-            st.write("• Enterprise-tier throughput limits")
-            st.write("• Secret 3,000,000 daily backend credits")
+            st.write("• Total configuration capabilities unlocked")
+            st.write("• Absolute queue bypass execution priorities")
+            st.write("• Complete structural tracking capacity")
             
-            # ⬇️ PASTE YOUR STRIPE INFINITY LINK HERE ⬇️
+            # Paste your live test link from your Stripe dashboard below
             infinity_stripe_url = "https://buy.stripe.com/test_5kQ14n8gbaBkgKR53S8IU01"
             st.link_button("Unlock Infinite Workspace", infinity_stripe_url)
             st.markdown("</div>", unsafe_allow_html=True)
