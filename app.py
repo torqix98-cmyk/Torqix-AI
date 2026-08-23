@@ -40,7 +40,7 @@ hf_client = InferenceClient(model="meta-llama/Llama-3.1-8B-Instruct", token=HF_T
 APP_URL = "https://torqix-ai.streamlit.app"
 
 # ─── DATABASE HELPER FUNCTIONS ───
-def sync_user_profile(user_id, email):
+def sync_user_profile(user_id, email=""):
     profile_payload = {
         "id": str(user_id),
         "email": str(email),
@@ -74,26 +74,19 @@ def update_user_credits(user_id, new_credits, total_messages):
 # ─── SESSION RESTORATION & STRIPE RETURN HANDLING ───
 query_params = st.query_params
 
-if "user_id" in query_params and "user" not in st.session_state:
-    saved_id = query_params["user_id"]
-    saved_email = query_params.get("email", "user@torqix.ai")
-    st.session_state.user_id = saved_id
-    st.session_state.user_email = saved_email
-    st.session_state.user = {"id": saved_id, "email": saved_email}
-    st.session_state.profile = sync_user_profile(saved_id, saved_email)
-
-if "payment" in query_params and query_params["payment"] == "success":
-    paid_tier = query_params.get("tier", "pro")
+if "user_id" in query_params:
+    target_uid = query_params["user_id"]
+    target_email = query_params.get("email", "")
     
-    if "user_id" in st.session_state or "user_id" in query_params:
-        target_uid = st.session_state.get("user_id", query_params.get("user_id"))
+    st.session_state.user_id = target_uid
+    st.session_state.user_email = target_email
+    st.session_state.user = {"id": target_uid, "email": target_email}
+    st.session_state.profile = sync_user_profile(target_uid, target_email)
+
+    if "payment" in query_params and query_params["payment"] == "success":
+        paid_tier = query_params.get("tier", "pro")
         credits_cap = 3000000 if paid_tier == "infinity" else 1000000
         
-        if "profile" in st.session_state:
-            st.session_state.profile["tier"] = paid_tier
-            st.session_state.profile["credits_remaining"] = credits_cap
-            st.session_state.profile["max_daily_credits"] = credits_cap
-
         try:
             supabase.table("user_profiles").update({
                 "tier": str(paid_tier),
@@ -102,8 +95,13 @@ if "payment" in query_params and query_params["payment"] == "success":
             }).eq("id", target_uid).execute()
         except Exception:
             pass
+
+        if "profile" in st.session_state:
+            st.session_state.profile["tier"] = paid_tier
+            st.session_state.profile["credits_remaining"] = credits_cap
+            st.session_state.profile["max_daily_credits"] = credits_cap
             
-        st.toast(f"🎉 Upgrade Confirmed! Switched to Torqix {paid_tier.upper()} mode.", icon="🔥")
+        st.toast(f"🎉 Payment Verified! Switched to Torqix {paid_tier.upper()} mode.", icon="🔥")
 
 # ─── BRAND HEADER ───
 col_logo, col_title = st.columns([1, 6])
@@ -216,7 +214,7 @@ else:
             st.markdown("""
                 <div style='background: #121000; border: 1px solid #FFD700; padding: 12px 20px; border-radius: 10px; margin-bottom: 20px;'>
                     <span class='tier-badge-infinity'>🔥 INFINITY ENGINE UNLOCKED</span>
-                    <p style='margin: 5px 0 0 0; font-size: 0.9rem; color: #E2E8F0;'>Maximum Context Window (1,500 Tokens) • Priority Processing • Uncapped Agent Capabilities</p>
+                    <p style='margin: 5px 0 0 0; font-size: 0.9rem; color: #E2E8F0;'>Maximum Context Window (1,500 Tokens) • Priority Processing • Uncapped Capabilities</p>
                 </div>
             """, unsafe_allow_html=True)
             max_response_tokens = 1500
@@ -293,8 +291,9 @@ else:
 
         col1, col2, col3 = st.columns(3)
 
-        pro_redirect = f"{APP_URL}?payment=success&tier=pro&user_id={user_id}&email={user_email}"
-        infinity_redirect = f"{APP_URL}?payment=success&tier=infinity&user_id={user_id}&email={user_email}"
+        # Build direct payment links without breaking URL parameters
+        pro_stripe_base = "https://buy.stripe.com/test_5kQeVd2VR24OeCJ67W8IU00"
+        infinity_stripe_base = "https://buy.stripe.com/test_dRm3cv9kf38S8el67W8IU02"
 
         with col1:
             st.markdown("<div class='credit-box'>", unsafe_allow_html=True)
@@ -317,7 +316,7 @@ else:
             if user_tier == "pro":
                 st.button("Active Plan", disabled=True, key="pro_active")
             else:
-                st.link_button("Upgrade to Pro", "https://buy.stripe.com/test_5kQeVd2VR24OeCJ67W8IU00")
+                st.link_button("Upgrade to Pro", pro_stripe_base)
             st.markdown("</div>", unsafe_allow_html=True)
 
         with col3:
@@ -331,5 +330,5 @@ else:
             if user_tier == "infinity":
                 st.button("Active Plan", disabled=True, key="inf_active")
             else:
-                st.link_button("Unlock Infinity Tier", "https://buy.stripe.com/test_dRm3cv9kf38S8el67W8IU02")
+                st.link_button("Unlock Infinity Tier", infinity_stripe_base)
             st.markdown("</div>", unsafe_allow_html=True)
