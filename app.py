@@ -96,7 +96,7 @@ else:
         try:
             supabase.table("user_profiles").upsert(profile_data).execute()
         except Exception:
-            pass  # Fallback gracefully if database table schema restricted
+            pass
 
     tier = profile_data.get("tier", "free")
     credits = profile_data.get("credits_remaining", 1000)
@@ -137,8 +137,9 @@ else:
                     st.write(user_prompt)
                 st.session_state.messages.append({"role": "user", "content": user_prompt})
 
+                # Updated model identifier for Groq API
                 completion = groq_client.chat.completions.create(
-                    model="llama3-8b-8192",
+                    model="llama-3.1-8b-instant",
                     messages=[{"role": "user", "content": user_prompt}]
                 )
                 ai_reply = completion.choices[0].message.content
