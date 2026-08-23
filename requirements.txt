@@ -1,4 +1,4 @@
 groq
 streamlit
 supabase
-streamlit-js-eval
+huggingface_hub
